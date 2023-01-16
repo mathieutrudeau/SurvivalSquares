@@ -1,0 +1,916 @@
+<!DOCTYPE html5>
+<html>
+    <head>
+        <title>Survival Squares</title>
+        <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+        <script language="javascript" src="jquery.hotkeys.js" type="text/javascript"></script>      <!-- Taken From Source -->
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-alpha.6/css/bootstrap.min.css" integrity="sha384-rwoIResjU2yc3z8GV/NPeZWAv56rSmLldC3R/AZzGRnGxQQKnKkoFVhFQhNUwEyJ" crossorigin="anonymous">
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/tether/1.4.0/js/tether.min.js" integrity="sha384-DztdAPBWPRXSA/3eYEEUWrWCy7G5KFbe8fFjk5JAIxUYHKkDx6Qin1DkWx51bBrb" crossorigin="anonymous"></script>
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-alpha.6/js/bootstrap.min.js" integrity="sha384-vBWWzlZJ8ea9aCX4pEW3rVHjgjt7zpkNpZk+02D9phzyeVkE+jo0ieGizqPLForn" crossorigin="anonymous"></script>
+       <style>
+           body{
+               background-color: black;
+               color: rgba(255, 0, 0, 0.849);
+           }
+           canvas{
+               background-color: white;
+           }
+        </style>
+    </head>
+    <body>
+        <script>
+            var CANVAS_WIDTH = $(window).innerWidth()-50;
+            var CANVAS_MIN_WIDTH = 0;
+            var CANVAS_HEIGHT = $(window).innerHeight()-50;
+            var CANVAS_MIN_HEIGHT = 0;
+            var FPS = 200;
+            var GameOver = false;
+            var P1Wins = true;
+            var AllBullets = [];
+            var AllEnnemies = [];
+            var bulletFiredONE = false;
+            var bulletFiredTWO = false;
+            var bullet_horizontal_directionONE = 0;
+            var bullet_vertical_directionONE = 0;
+            var bullet_horizontal_directionTWO = 0;
+            var bullet_vertical_directionTWO = 0;
+            var ennC = 0;
+            var P1Score = new Score();
+            var P2Score = new Score();
+            P1Score.owner="P1";
+            P2Score.owner="P2";
+            P1Score.x = CANVAS_MIN_WIDTH+20;
+            P1Score.y = CANVAS_MIN_HEIGHT+30;
+            P2Score.x = CANVAS_WIDTH-90;
+            P2Score.y = CANVAS_MIN_HEIGHT+30;
+            var SpawnDistance = 100;
+            var startedPlaying = false;
+            var P1GamesWon = 0;
+            var P2GamesWon = 0;
+            var GamesWonRecorded = false;
+            var GameEndSound = new Audio('sounds/Explosion+3.wav');
+            var nukeSound = new Audio('sounds/Bomb-SoundBible.com-891110113.wav');
+            var scream = new Audio('sounds/Wilhelm-Scream.mp3');
+
+
+            var canvasElement = $("<canvas width='"+CANVAS_WIDTH+"' height='"+CANVAS_HEIGHT+"'></canvas>");
+            var canvas = canvasElement.get(0).getContext("2d");
+            canvasElement.appendTo('body');
+            $('canvas').attr('hidden',true);
+            $("html").css("overflow", "");
+
+            window.requestAnimationFrame(update);
+            function update() 
+            {   GameStarted();
+                EndOfGame();
+                if(startedPlaying && !GameOver)
+                {   FirstCommandsSet();
+                    SecondCommandsSet();
+                    draw();
+                }
+                window.requestAnimationFrame(update);
+            }
+
+            function draw()
+            {   canvas.clearRect(0,0,CANVAS_WIDTH,CANVAS_HEIGHT);
+                canvas.fillStyle = "#000";
+                PlayerONE.draw();
+                PlayerTWO.draw();
+                if(ennC == FPS)
+                {   SpawnNewEnnemy();
+                    ennC = 0;
+                    if(FPS<30)
+                    {   FPS-=5;
+                    }
+                    else
+                    {   FPS-=10;
+                    }
+                    if(FPS == 0)
+                    {   FPS = 200;
+                        SpawnBoss();
+                    }
+                }
+                else
+                {   ennC++;
+                }
+                ShowScore();
+                ShowEnnemies();
+                ShowBullets();
+                EnnemyKilled();
+                PlayerShot();
+            }
+
+            function DetectCollision(objectA, objectB)
+            {   var NoCollision = true;
+                if((objectA.y + objectA.height)<(objectB.y))
+                {   NoCollision = false;
+                }
+                if(objectA.y>(objectB.y+objectB.height))
+                {   NoCollision =false;
+                }
+                if((objectA.x+objectA.width)<objectB.x)
+                {   NoCollision = false;
+                }
+                if(objectA.x>(objectB.x+objectB.width))
+                {   NoCollision = false;
+                }
+                return NoCollision;
+            }
+
+            function GameStarted()
+            {   $('#startBtn').click(function()
+                {  if(!startedPlaying)
+                    {   startedPlaying=true;
+                        $('canvas').attr('hidden',false);
+                        $("html").css("overflow", "hidden");
+                        $('#title').text("GAME ON FELLAS!");
+                    }
+                    else if(startedPlaying && GameOver)
+                    {   GameOver = false;
+                        $('canvas').attr('hidden',false);
+                        $("html").css("overflow", "hidden");
+                        $('#title').text("GAME ON FELLAS!");
+                        ResetGame();
+                    }
+                });
+            }
+
+            function EndOfGame()
+            {   if(GameOver)
+                {   $('canvas').attr('hidden',true);
+                    $("html").css("overflow", "");
+                    $('#startBtn').text("PLAY AGAIN?");
+                    $('#title').text("GAME OVER!");
+                    if(P1Wins)
+                    {   $('#winner').text("Player ONE WINS!");
+                        if(!GamesWonRecorded)
+                        {   P1GamesWon++;
+                            GamesWonRecorded=true;
+                        }
+                        $('#p1score').text(P1GamesWon);
+                    }
+                    else
+                    {   $('#winner').text("Player TWO WINS!");
+                        if(!GamesWonRecorded)
+                        {   P2GamesWon++;
+                            GamesWonRecorded=true;
+                        }
+                        $('#p2score').text(P2GamesWon);
+                    }
+                }
+            }
+
+            function ResetGame()
+            {   while(AllBullets.length!=0)
+                {   AllBullets.pop();
+                }
+                while(AllEnnemies.length!=0)
+                {   AllEnnemies.pop();
+                }
+                P1Score.points=0;
+                P2Score.points=0;
+                P1Score.thousandReached=false;
+                P2Score.thousandReached=false;
+                PlayerONE.x = PlayerONE.spawnX;
+                PlayerONE.y = PlayerONE.spawnY;
+                PlayerTWO.x = PlayerTWO.spawnX;
+                PlayerTWO.y = PlayerTWO.spawnY;
+                FPS = 200;
+                ennC = 0;
+                bulletFiredONE = false;
+                bulletFiredTWO = false;
+                bullet_horizontal_directionONE = 0;
+                bullet_vertical_directionONE = 0;
+                bullet_horizontal_directionTWO = 0;
+                bullet_vertical_directionTWO = 0;
+                GamesWonRecorded = false;
+            }
+            //---------------------------------------------------------
+            //          PLAYER FUNCTIONS
+            //---------------------------------------------------------
+            var PlayerONE = 
+            {   color: "#00A",
+                x : 0,
+                y : CANVAS_HEIGHT/2,
+                width : 32,
+                height : 32,
+                speed : 5,
+                spawnX:0,
+                spawnY:CANVAS_HEIGHT/2,
+                draw : function()
+                {   canvas.fillStyle = this.color;
+                    canvas.fillRect(this.x, this.y, this.width, this.height);
+                }
+            };
+            var PlayerTWO = 
+            {   color: "#99ff33",
+                x :CANVAS_WIDTH-32,
+                y : CANVAS_HEIGHT/2,
+                width : 32,
+                height : 32,
+                speed : 5,
+                spawnX:CANVAS_WIDTH-32,
+                spawnY:CANVAS_HEIGHT/2,
+                draw : function()
+                {   canvas.fillStyle = this.color;
+                    canvas.fillRect(this.x, this.y, this.width, this.height);
+                }
+            };
+
+            function PlayerShot()
+            {   AllBullets.forEach(NewBullet =>
+                {   if(NewBullet.owner == "P1" && DetectCollision(NewBullet, PlayerTWO))
+                    {   P2Score.points -= 10;
+                        NewBullet.isGone = true;
+                    }
+                    else if(NewBullet.owner == "P2" && DetectCollision(NewBullet, PlayerONE))
+                    {   P1Score.points -= 10;
+                        NewBullet.isGone = true;
+                    }
+                    else
+                    {
+                    }
+                });
+                var counterB = 0;
+                AllBullets.forEach(NewBullet =>
+                {   if(NewBullet.isGone)
+                    {   NewBullet.hitSound.play();
+                        AllBullets.splice(counterB,1);
+                    }
+                    counterB++;
+                });
+                IsGameOver();
+            }
+
+            function IsGameOver()
+            {   AllEnnemies.forEach(newEnnemy =>
+                {   if(DetectCollision(newEnnemy, PlayerONE))
+                    {   GameEndSound.play();
+                        scream.play();
+                        GameOver = true;
+                        P1Wins = false;
+                    }
+                    else if(DetectCollision(newEnnemy, PlayerTWO))
+                    {   GameEndSound.play();
+                        scream.play();
+                        GameOver = true;
+                        P1Wins = true;
+                    }
+                });
+            }
+
+            function FirstCommandsSet()
+            {   if(keydown.left)
+                {   PlayerONE.x -= PlayerONE.speed;
+                    if(DetectCollision(PlayerONE, PlayerTWO))
+                    {   PlayerONE.x +=PlayerONE.speed;
+                    }
+                    if(PlayerONE.x < 0)
+                    {   PlayerONE.x = 0;
+                    }
+                    bullet_horizontal_directionONE = -1;
+                }
+                if(keydown.right)
+                {   PlayerONE.x += PlayerONE.speed;
+                    if(DetectCollision(PlayerONE, PlayerTWO))
+                    {   PlayerONE.x -= PlayerONE.speed;
+                    }
+                    if((PlayerONE.x+PlayerONE.width) > CANVAS_WIDTH)
+                    {   var pos = CANVAS_WIDTH-PlayerONE.width
+                        PlayerONE.x = pos;
+                    }
+                    bullet_horizontal_directionONE = 1;
+                }
+                if(keydown.up)
+                {   PlayerONE.y -= PlayerONE.speed;
+                    if(DetectCollision(PlayerONE, PlayerTWO))
+                    {   PlayerONE.y +=PlayerONE.speed;
+                    }
+                    if(PlayerONE.y < 0)
+                    { PlayerONE.y = 0;
+                    }
+                    bullet_vertical_directionONE = -1;
+                }
+                if(keydown.down)
+                {   PlayerONE.y += PlayerONE.speed;
+                    if(DetectCollision(PlayerONE, PlayerTWO))
+                    {   PlayerONE.y -=PlayerONE.speed;
+                    }
+                    if((PlayerONE.y+PlayerONE.height) > CANVAS_HEIGHT)
+                    {
+                        var  pos = CANVAS_HEIGHT-PlayerONE.height;
+                        PlayerONE.y = pos;
+                    }
+                    bullet_vertical_directionONE = 1;
+                }
+                if((!keydown.left && !keydown.right)&&(keydown.up||keydown.down))
+                {   bullet_horizontal_directionONE = 0;
+                }
+                if((!keydown.up && !keydown.down)&&(keydown.left||keydown.right))
+                {   bullet_vertical_directionONE = 0;
+                }
+                if(keydown.return)
+                {   if(!bulletFiredONE)
+                    {   FireBullet(1);
+                        bulletFiredONE = true;
+                    }
+                }
+                else
+                {   bulletFiredONE = false;
+                }
+                if(keydown.shift)
+                {   if(P1Score.points>=1000)
+                    {   P1Score.points+=DropNuke();
+                        P1Score.points-=1000;
+                        P1Score.thousandReached=false;
+                        nukeSound.play();
+                    }
+                }
+            }
+        
+            function SecondCommandsSet()
+            {   if(keydown.a)
+                {   PlayerTWO.x -= PlayerTWO.speed;
+                    if(DetectCollision(PlayerTWO, PlayerONE))
+                    {   PlayerTWO.x +=PlayerTWO.speed;
+                    }
+                    if(PlayerTWO.x < 0)
+                    {   PlayerTWO.x = 0;
+                    }
+                    bullet_horizontal_directionTWO = -1;
+                }
+                if(keydown.d)
+                {   PlayerTWO.x += PlayerTWO.speed;
+                    if(DetectCollision(PlayerTWO, PlayerONE))
+                    {   PlayerTWO.x -= PlayerTWO.speed;
+                    }
+                    if((PlayerTWO.x+PlayerTWO.width) > CANVAS_WIDTH)
+                    {   var pos = CANVAS_WIDTH-PlayerTWO.width
+                        PlayerTWO.x = pos;
+                    }
+                    bullet_horizontal_directionTWO = 1;
+                }
+                if(keydown.w)
+                {   PlayerTWO.y -= PlayerTWO.speed;
+                    if(DetectCollision(PlayerTWO, PlayerONE))
+                    {   PlayerTWO.y +=PlayerTWO.speed;
+                    }
+                    if(PlayerTWO.y < 0)
+                    { PlayerTWO.y = 0;
+                    }
+                    bullet_vertical_directionTWO = -1;
+                }
+                if(keydown.s)
+                {   PlayerTWO.y += PlayerTWO.speed;
+                    if(DetectCollision(PlayerTWO, PlayerONE))
+                    {   PlayerTWO.y -=PlayerTWO.speed;
+                    }
+                    if((PlayerTWO.y+PlayerTWO.height) > CANVAS_HEIGHT)
+                    {   var  pos = CANVAS_HEIGHT-PlayerTWO.height;
+                        PlayerTWO.y = pos;
+                    }
+                    bullet_vertical_directionTWO = 1;
+                }
+                if((!keydown.a && !keydown.d)&&(keydown.w||keydown.s))
+                {   bullet_horizontal_directionTWO = 0;
+                }
+                if((!keydown.w && !keydown.s)&&(keydown.a||keydown.d))
+                {   bullet_vertical_directionTWO = 0;
+                }
+                if(keydown.space)
+                {   if(!bulletFiredTWO)
+                    {   FireBullet(2);
+                        bulletFiredTWO = true;
+                    }
+                }
+                else
+                {   bulletFiredTWO = false;
+                } 
+                if(keydown.z)
+                {   if(P2Score.points>=1000)
+                    {   P2Score.points+=DropNuke();
+                        P2Score.points-=1000;
+                        P2Score.thousandReached=false;
+                        P2Score.x+=350;
+                        nukeSound.play();
+                    }
+                }
+            }
+            //---------------------------------------------------------
+            //          BULLETS FUNCTIONS
+            //---------------------------------------------------------
+            function bullet()  
+            {   this.color = "#000";
+                this.x = 220;
+                this.y = 270;
+                this.width =  15;
+                this.height = 2;
+                this.horizontal_direction= 0;
+                this.vertical_direction= 0;
+                this.isGone = false;
+                this.owner = "";
+                this.shootSound = new Audio('sounds/Gun+Silencer.wav');
+                this.hitSound = new Audio('sounds/hitmarker_2.mp3');
+                this.draw = function()
+				
+                {   canvas.fillStyle = this.color;
+                    canvas.fillRect(this.x, this.y, this.width, this.height);
+                }
+            };
+            
+            function FireBullet(setNUM)
+            {   var newBullet = new bullet();
+                var NoMovement = false;
+                if(setNUM==1)
+                {   newBullet.owner = "P1";
+                }
+                else
+                {   newBullet.owner = "P2";
+                }
+                if(setNUM==1)
+                {   newBullet.horizontal_direction = bullet_horizontal_directionONE;
+                    newBullet.vertical_direction = bullet_vertical_directionONE;
+                }
+                else
+                {   newBullet.horizontal_direction = bullet_horizontal_directionTWO;
+                    newBullet.vertical_direction = bullet_vertical_directionTWO;
+                }
+                if(newBullet.horizontal_direction == 1)
+                {   if(setNUM==1)
+                    {   newBullet.x = (PlayerONE.x + PlayerONE.width);
+                        newBullet.y = (PlayerONE.y + (PlayerONE.height)/2);
+                    }
+                    else
+                    {   newBullet.x = (PlayerTWO.x + PlayerTWO.width);
+                        newBullet.y = (PlayerTWO.y + (PlayerTWO.height)/2);
+                    }
+                }
+                else if(newBullet.horizontal_direction == -1)
+                {   if(setNUM==1)
+                    {   newBullet.x = (PlayerONE.x - newBullet.width);
+                        newBullet.y = (PlayerONE.y + (PlayerONE.height)/2);
+                    }
+                    else
+                    {   newBullet.x = (PlayerTWO.x - newBullet.width);
+                        newBullet.y = (PlayerTWO.y + (PlayerTWO.height)/2);
+                    }
+                }
+                else
+                {   if(newBullet.vertical_direction == 1)
+                    {   if(setNUM==1)
+                        {   var height = newBullet.width;
+                            newBullet.width = newBullet.height;
+                            newBullet.height = height;
+                            newBullet.x = (PlayerONE.x + (PlayerONE.width)/2);
+                            newBullet.y = (PlayerONE.y + PlayerONE.height);
+                        }
+                        else
+                        {   var height = newBullet.width;
+                            newBullet.width = newBullet.height;
+                            newBullet.height = height;
+                            newBullet.x = (PlayerTWO.x + (PlayerTWO.width)/2);
+                            newBullet.y = (PlayerTWO.y + PlayerTWO.height);
+                        }
+                    }
+                    else if(newBullet.vertical_direction == -1)
+                    {   if(setNUM==1)
+                        {   var height = newBullet.width;
+                            newBullet.width = newBullet.height;
+                            newBullet.height = height;
+                            newBullet.x = (PlayerONE.x + (PlayerONE.width)/2);
+                            newBullet.y = (PlayerONE.y - newBullet.height);
+                        }
+                        else
+                        {   var height = newBullet.width;
+                            newBullet.width = newBullet.height;
+                            newBullet.height = height;
+                            newBullet.x = (PlayerTWO.x + (PlayerTWO.width)/2);
+                            newBullet.y = (PlayerTWO.y - newBullet.height);
+                        }
+                    }
+                    else
+                    {   NoMovement = true;
+                    }
+                }
+                if(!NoMovement)
+                {   newBullet.shootSound.play();
+                    AllBullets.push(newBullet);
+                }
+            }
+
+            function ShowBullets()
+            {   var counter=0;
+                AllBullets.forEach(bullet => 
+                {   if(bullet.horizontal_direction == -1)
+                    {   bullet.x -= 15;
+                    }
+                    else if(bullet.horizontal_direction == 1)
+                    {   bullet.x +=15;
+                    }
+                    else
+                    {   
+                    }
+                    if(bullet.vertical_direction  == -1)
+                    {
+                        bullet.y -= 15;
+                    }
+                    else if(bullet.vertical_direction == 1)
+                    {
+                        bullet.y += 15;
+                    }
+                    else
+                    {
+                    }
+                    bullet.draw();
+                    if(bullet.x>CANVAS_WIDTH)
+                    {   AllBullets.splice(counter,1);
+                    }
+                    if((bullet.x-bullet.width)<0)
+                    {   AllBullets.splice(counter,1)
+                    }
+                    if(bullet.y>CANVAS_HEIGHT)
+                    {   AllBullets.splice(counter,1);
+                    }
+                    if((bullet.y-bullet.height)<0)
+                    {   AllBullets.splice(counter,1);
+                    }
+                    counter++;
+                });
+                console.log(AllBullets);
+            }
+            //---------------------------------------------------------
+            //          Ennemies
+            //---------------------------------------------------------
+            function Ennemy()
+            {   this.color = "red";
+                this.x = 120;
+                this.y =120;
+                this.width = 20;
+                this.height = 20;
+                this.speed = 2;
+                this.focus = "";
+                this.isDead = false;
+                this.isBoss = false;
+                this.spawnSound = new Audio('sounds/sms-alert-1-daniel_simon.wav');
+                this.draw = function()
+                {   canvas.fillStyle = this.color;
+                    canvas.fillRect(this.x, this.y, this.width, this.height);
+                }
+            };
+
+            function BossEnnemy()
+            {   this.color = "black";
+                this.x = 120;
+                this.y =120;
+                this.width = 60;
+                this.height = 60;
+                this.speed = 2;
+                this.isBoss = true;
+                this.lives = 10;
+                this.focus = "";
+                this.isDead = false;
+                this.spawnSound = new Audio('sounds/creepy-background-daniel_simon.wav');
+                this.draw = function()
+                {   canvas.fillStyle = this.color;
+                    canvas.fillRect(this.x, this.y, this.width, this.height);
+                }
+            };
+
+            function EnnemyMovement(newEnnemy)
+            {   newEnnemy = SetEnnemyFocus(newEnnemy);
+                if(newEnnemy.focus == "P1")
+                {   if(PlayerONE.y < newEnnemy.y)
+                    {   newEnnemy.y -= newEnnemy.speed;
+                    }
+                    else if(PlayerONE.y > newEnnemy.y)
+                    {   newEnnemy.y += newEnnemy.speed;
+                    }
+                    else
+                    {
+                    }
+                    if(PlayerONE.x < newEnnemy.x)
+                    {   newEnnemy.x -= newEnnemy.speed;
+                    }
+                    else if(PlayerONE.x > newEnnemy.x)
+                    {   newEnnemy.x += newEnnemy.speed;
+                    }
+                    else
+                    {
+                    }
+                }
+                else
+                {   if(PlayerTWO.y < newEnnemy.y)
+                    {   newEnnemy.y -= newEnnemy.speed;
+                    }
+                    else if(PlayerTWO.y > newEnnemy.y)
+                    {   newEnnemy.y += newEnnemy.speed;
+                    }
+                    else
+                    {
+                    }
+                    if(PlayerTWO.x < newEnnemy.x)
+                    {   newEnnemy.x -= newEnnemy.speed;
+                    }
+                    else if(PlayerTWO.x > newEnnemy.x)
+                    {   newEnnemy.x += newEnnemy.speed;
+                    }
+                    else
+                    {
+                    }
+                }
+                return newEnnemy;
+            }
+
+            function SetEnnemyFocus(newEnnemy)
+            {   var DtoP1 = Math.pow((newEnnemy.x - PlayerONE.x),2) + Math.pow((newEnnemy.y - PlayerONE.y),2);
+                var DtoP2 = Math.pow((newEnnemy.x - PlayerTWO.x),2) + Math.pow((newEnnemy.y - PlayerTWO.y),2);
+                if(DtoP1<DtoP2)
+                {   newEnnemy.focus = "P1";
+                }
+                else
+                {   newEnnemy.focus = "P2";
+                }
+                return newEnnemy;
+            }
+
+            function ShowEnnemies()
+            {   AllEnnemies.forEach(ennemy =>
+                {   ennemy = EnnemyMovement(ennemy);
+                    ennemy.draw();
+                });
+                console.log(AllEnnemies);
+            }
+
+            function EnnemyKilled()
+            {   var counterB=0;
+                var counterE=0; 
+                AllBullets.forEach(NewBullet =>
+                {   AllEnnemies.forEach(newEnnemy =>
+                    {   if(DetectCollision(NewBullet, newEnnemy))
+                        {   if(!newEnnemy.isBoss)
+                            {   newEnnemy.isDead = true;
+                                NewBullet.isGone = true;
+                                if(NewBullet.owner =="P1")
+                                {   P1Score.points+=20;
+                                }
+                                else
+                                {   P2Score.points+=20;
+                                }
+                            }
+                            else
+                            {   newEnnemy.lives--;
+                                NewBullet.isGone = true;
+                                if(newEnnemy.lives==0)
+                                {   newEnnemy.isDead = true;
+                                    scream.play();
+                                    if(NewBullet.owner =="P1")
+                                    {   P1Score.points+=100;
+                                    }
+                                    else
+                                    {   P2Score.points+=100;
+                                    }
+                                }
+                            }
+                        }
+                    });
+                });
+                AllBullets.forEach(NewBullet =>
+                {   if(NewBullet.isGone)
+                    {   NewBullet.hitSound.play();
+                        AllBullets.splice(counterB,1);
+                    }
+                    counterB++;
+                });
+                AllEnnemies.forEach(newEnnemy =>
+                {   if(newEnnemy.isDead)
+                    {   AllEnnemies.splice(counterE,1);
+                    }
+                    counterE++;
+                });
+            }
+
+            function SpawnNewEnnemy()
+            {   var newEnnemy = new Ennemy();
+                newEnnemy = DetermineSpawnLocation(newEnnemy);
+                newEnnemy.draw();
+                newEnnemy.spawnSound.play();
+                AllEnnemies.push(newEnnemy);
+            }
+
+            function SpawnBoss()
+            {   var boss = new BossEnnemy();
+                boss = DetermineSpawnLocation(boss);
+                boss.draw();
+                boss.spawnSound.play();
+                AllEnnemies.push(boss);
+            }
+
+            function DetermineSpawnLocation(newEnnemy)
+            {   var spawnLocationFound = false;
+                var countCollision = 0;
+                while(!spawnLocationFound)
+                {   var Y = Math.random() * (CANVAS_HEIGHT-CANVAS_MIN_HEIGHT-newEnnemy.height) + CANVAS_MIN_HEIGHT;
+                    var X = Math.random() * (CANVAS_WIDTH-CANVAS_MIN_WIDTH-newEnnemy.width) + CANVAS_MIN_WIDTH;
+                    newEnnemy.y = Y;
+                    newEnnemy.x = X;
+                    if(!DetectCollision(newEnnemy, PlayerTWO) && !DetectCollision(newEnnemy, PlayerONE)&&SetSpawnRadius(newEnnemy,PlayerONE)&&SetSpawnRadius(newEnnemy,PlayerTWO))
+                    {   if(AllEnnemies.length>0)
+                        {   AllEnnemies.forEach(ennemy => 
+                            {   if(DetectCollision(newEnnemy, ennemy))
+                                {   countCollision++;
+                                }
+                            })
+                            if(countCollision==0)
+                            {   spawnLocationFound = true;
+                            }
+                        }      
+                        else
+                        {   spawnLocationFound = true;
+                        }
+                    }
+                }
+                return newEnnemy;
+            }
+
+            function SetSpawnRadius(newEnnemy, player)
+            {   var distanceRespected = true;
+                if((newEnnemy.x+newEnnemy.width)<player.x)
+                {   if(((newEnnemy.x+newEnnemy.width)+SpawnDistance)>player.x)
+                    {   distanceRespected = false;
+                    }
+                }
+                else if(newEnnemy.x>(player.x+player.width))
+                {   if((player.x+player.width+SpawnDistance)>newEnnemy.x)
+                    {   distanceRespected = false;
+                    }
+                }
+                if((newEnnemy.y+newEnnemy.height)<player.y)
+                {   if((newEnnemy.y+newEnnemy.height+SpawnDistance)>player.y)
+                    {   distanceRespected = false;
+                    }
+                }
+                else if(newEnnemy.y>(player.y+player.height))
+                {   if((player.y+player.height+SpawnDistance)>newEnnemy.y)
+                    {   distanceRespected=false;
+                    }
+                }
+                return distanceRespected;
+            }
+            //---------------------------------------------------------
+            //          Score Board
+            //---------------------------------------------------------
+            function Score()
+            {   this.points = 0;
+                this.minScore = 0;
+                this.x = 40;
+                this.y = 40;
+                this.width = "30px";
+                this.height = "Consolas";
+                this.color = "black";
+                this.owner = "";
+                this.thousandReached = false;
+                this.draw = function()
+                {   if(this.points>=1000)
+                    {   if(this.owner=="P1")
+                        {   this.text = this.points+" || NUKE ACTIVATED!";
+                            this.thousandReached = true;
+                        }
+                        else if(this.owner =="P2")
+                        {   this.text = "NUKE ACTIVATED! || "+this.points;
+                            if(this.thousandReached==false)
+                            {   this.x-=350;
+                                this.thousandReached=true;
+                            }
+                        }
+                    }
+                    else
+                    {   this.text = this.points;
+                    }
+                    canvas.font = this.width+" "+this.height;
+                    canvas.fillStyle = this.color;
+                    canvas.fillText(this.text, this.x, this.y);
+                }
+            }
+
+            function ShowScore()
+            {   if(P1Score.points < 0)
+                {   P1Score.points = 0;
+                }
+                else if(P2Score.points < 0)
+                {   P2Score.points = 0;
+                }
+                P1Score.draw();
+                P2Score.draw();
+                if(ennC == FPS)
+                {   P1Score.points+=15;
+                    P2Score.points+=15;
+                }
+            }
+            //---------------------------------------------------------
+            //          NUKE
+            //---------------------------------------------------------
+            function DropNuke()
+            {   var points = 0;
+                AllEnnemies.forEach(ennemy =>
+                {   if(ennemy.isBoss)
+                    {   points+=100;
+                    }
+                    else
+                    {   points+=20;
+                    }
+                });
+                while(AllEnnemies.length!=0)
+                { AllEnnemies.pop();
+                }
+                return points;
+            }
+            //---------------------------------------------------------
+            //          OTHER FUNCTIONS
+            //---------------------------------------------------------
+            $(function()                                                         //Taken From Source
+            {   window.keydown = {};
+                function keyName(event) 
+                {   return jQuery.hotkeys.specialKeys[event.which] ||
+                    String.fromCharCode(event.which).toLowerCase();
+                }
+                $(document).bind("keydown", function(event) 
+                {   keydown[keyName(event)] = true;
+                });
+                $(document).bind("keyup", function(event) 
+                {   keydown[keyName(event)] = false;
+                });
+            });
+
+        </script>
+        <div class="container-fluid">
+                <div class="row">
+                    <div class="col-3">
+                        <img align="left" src="images/Fire Flames 9.jpg" alt="" width="200" height="100">
+                        <h1 align="right" id="p1score"></h1>
+                    </div>
+                    <div class="col-6">
+                            <h1 align="center" id="title">Welcome to Survival Squares!</h1>
+                            <h5 align="center"><p id="winner"></p><button id="startBtn" style="background-color:red; color:white">START GAME!</button></h5>
+                    </div>
+                    <div class="col-3">
+                            <img align="right" src="images/Fire Flames 9.jpg" alt="" width="200" height="100">
+                            <h1 align="left" id="p2score"></h1>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-6">
+                        <h3 align="left">Player <a style="color:#00A">ONE</a> controls</h3>
+                        <p align="left">
+                            Left Arrow => Move Left
+                            <br>
+                            Right Arrow => Move Right
+                            <br>
+                            Up Arrow => Move Up
+                            <br>
+                            Down Arrow => Move Down
+                            <br>
+                            Enter => Shoots in the direction in which the player is moving 
+                            <br>
+                            Shift => Drops a Nuke if it is Unlocked
+                        </p>
+                    </div>
+                    <div class="col-6">
+                        <h3 align="right">Player <a style="color:#99ff33">TWO</a> controls</h3>
+                        <p align="right">
+                            A => Move Left
+                            <br>
+                            D => Move Right
+                            <br>
+                            W => Move Up
+                            <br>
+                            S => Move Down
+                            <br>
+                            Space => Shoots in the direction in which the player is moving
+                            <br>
+                            Z => Drops a Nuke if it is Unlocked
+                        </p>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-12">
+                        <h2 align="center">Instructions</h2>
+                        <p align="center">
+                            Both Player ONE (blue) & Player TWO (green) got to fight off waves of ennemies (red & black) in order to survive.
+                            <br>
+                            The player that survives the longest wins the match!
+                            <br>
+                            When the end of a wave is reached, a BOSS (black) will spawn. It will take 10 hits to kill him!
+                            <br>
+                            When a player reaches a 1000 points or more, it enables him to drop a nuke which wipes out all ennemies on the battlefield!
+                            <br>
+                            Points are given every time an ennemy spawns, with extra for killing one and a SUPER EXTRA for killing the BOSS!
+                            <br>
+                            BE CAREFUL! Getting shot by another player will make you lose points!
+                            <br>
+                            May the strongest SURVIVE! Enjoy FELLAS!
+                        </p>
+                    </div>
+                </div>
+            </div>
+    </body>
+</html>
